@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { View, Text, Alert, ActivityIndicator } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
+import { Shift } from '../types';
+import { fetchShifts } from '../api/shifts';
 
 const HomeScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -8,6 +10,7 @@ const HomeScreen = () => {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [shifts, setShifts] = useState<Shift[]>([]);
 
   useEffect(() => {
     const requestLocation = async () => {
@@ -44,6 +47,23 @@ const HomeScreen = () => {
     requestLocation();
   }, []);
 
+  useEffect(() => {
+    const getShifts = async () => {
+      if (!location) return;
+
+      try {
+        const shiftsData = await fetchShifts(location.lat, location.lon);
+        setShifts(shiftsData);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    getShifts();
+  }, [location]);
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -62,11 +82,13 @@ const HomeScreen = () => {
   }
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text>
-        Координаты: {location?.lat}, {location?.lon}
-      </Text>
-      {/* Сюда потом добавим список */}
+    <View style={{ flex: 1 }}>
+      <Text>Найдено смен: {shifts.length}</Text>
+      {shifts.map((shift, index) => (
+        <Text key={index}>
+          {shift.companyName} - {shift.address}
+        </Text>
+      ))}
     </View>
   );
 };
