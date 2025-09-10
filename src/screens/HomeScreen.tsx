@@ -1,10 +1,27 @@
 import { useState, useEffect } from 'react';
-import { View, Text, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  PermissionsAndroid,
+  Platform,
+  FlatList,
+} from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
 import { Shift } from '../types';
 import { fetchShifts } from '../api/shifts';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
+import ShiftListItem from '../components/ShiftListItem';
+
+type HomeScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Home'
+>;
 
 const HomeScreen = () => {
+  const navigation = useNavigation<HomeScreenNavigationProp>();
   const [isLoading, setIsLoading] = useState(true);
   const [location, setLocation] = useState<{ lat: number; lon: number } | null>(
     null,
@@ -15,15 +32,26 @@ const HomeScreen = () => {
   useEffect(() => {
     const requestLocation = async () => {
       try {
-        // Запрос разрешения
-        const permission = await Geolocation.requestAuthorization('whenInUse');
-        if (permission !== 'granted') {
+        let hasPermission = false;
+
+        if (Platform.OS === 'android') {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          );
+          hasPermission = granted === PermissionsAndroid.RESULTS.GRANTED;
+        } else {
+          const permission = await Geolocation.requestAuthorization(
+            'whenInUse',
+          );
+          hasPermission = permission === 'granted';
+        }
+
+        if (!hasPermission) {
           setError('Разрешение на геолокацию не предоставлено');
           setIsLoading(false);
           return;
         }
 
-        // Получение координат
         Geolocation.getCurrentPosition(
           position => {
             setLocation({
@@ -54,7 +82,7 @@ const HomeScreen = () => {
       try {
         const shiftsData = await fetchShifts(location.lat, location.lon);
         setShifts(shiftsData);
-      } catch (err) {
+      } catch (err: any) {
         setError(err.message);
       } finally {
         setIsLoading(false);
@@ -82,14 +110,23 @@ const HomeScreen = () => {
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <Text>Найдено смен: {shifts.length}</Text>
-      {shifts.map((shift, index) => (
-        <Text key={index}>
-          {shift.companyName} - {shift.address}
+    <FlatList
+      data={shifts}
+      keyExtractor={(item, index) => index.toString()}
+      renderItem={({ item }) => (
+        <ShiftListItem
+          shift={item}
+          onPress={() => navigation.navigate('Details', { shift: item })}
+        />
+      )}
+      ListHeaderComponent={
+        <Text style={{ padding: 16, fontSize: 16, fontWeight: 'bold' }}>
+          Найдено смен: {shifts.length}
         </Text>
-      ))}
-    </View>
+      }
+      contentContainerStyle={{ padding: 16 }}
+    />
   );
 };
+
 export default HomeScreen;
